@@ -2,6 +2,7 @@
 
 #include <AP_Common/AP_Common.h>
 #include <AP_HAL/AP_HAL.h>
+#if HAL_INS_ENABLED
 #include <AP_HAL/I2CDevice.h>
 #include <AP_HAL/SPIDevice.h>
 #include <AP_Math/AP_Math.h>
@@ -660,8 +661,9 @@ AP_InertialSensor::AP_InertialSensor() : _board_orientation(ROTATION_NONE),
         _accel_vibe_floor_filter[i].set_cutoff_frequency(AP_INERTIAL_SENSOR_ACCEL_VIBE_FLOOR_FILT_HZ);
         _accel_vibe_filter[i].set_cutoff_frequency(AP_INERTIAL_SENSOR_ACCEL_VIBE_FILT_HZ);
     }
-
+#if HAL_INS_ACCELCAL_ENABLED
     AP_AccelCal::register_client(this);
+#endif
 }
 
 /*
@@ -681,9 +683,14 @@ AP_InertialSensor *AP_InertialSensor::get_singleton()
  */
 bool AP_InertialSensor::register_gyro(uint8_t &instance, uint16_t raw_sample_rate_hz, uint32_t id)
 {
+<<<<<<< HEAD
     if (_gyro_count == INS_MAX_INSTANCES)
     {
         gcs().send_text(MAV_SEVERITY_WARNING, "Failed to register gyro id %u", unsigned(id));
+=======
+    if (_gyro_count == INS_MAX_INSTANCES) {
+        GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Failed to register gyro id %u", unsigned(id));
+>>>>>>> a098c80671e705c696aedc247de4b62041397729
         return false;
     }
 
@@ -720,9 +727,14 @@ bool AP_InertialSensor::register_gyro(uint8_t &instance, uint16_t raw_sample_rat
  */
 bool AP_InertialSensor::register_accel(uint8_t &instance, uint16_t raw_sample_rate_hz, uint32_t id)
 {
+<<<<<<< HEAD
     if (_accel_count == INS_MAX_INSTANCES)
     {
         gcs().send_text(MAV_SEVERITY_WARNING, "Failed to register accel id %u", unsigned(id));
+=======
+    if (_accel_count == INS_MAX_INSTANCES) {
+        GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Failed to register accel id %u", unsigned(id));
+>>>>>>> a098c80671e705c696aedc247de4b62041397729
         return false;
     }
 
@@ -823,6 +835,7 @@ bool AP_InertialSensor::set_gyro_window_size(uint16_t size)
     _gyro_window_size = size;
 
     // allocate FFT gyro window
+<<<<<<< HEAD
     for (uint8_t i = 0; i < INS_MAX_INSTANCES; i++)
     {
         for (uint8_t j = 0; j < XYZ_AXIS_COUNT; j++)
@@ -830,6 +843,12 @@ bool AP_InertialSensor::set_gyro_window_size(uint16_t size)
             if (!_gyro_window[i][j].set_size(size))
             {
                 gcs().send_text(MAV_SEVERITY_WARNING, "Failed to allocate window for INS");
+=======
+    for (uint8_t i = 0; i < INS_MAX_INSTANCES; i++) {
+        for (uint8_t j = 0; j < XYZ_AXIS_COUNT; j++) {
+            if (!_gyro_window[i][j].set_size(size)) {
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Failed to allocate window for INS");
+>>>>>>> a098c80671e705c696aedc247de4b62041397729
                 // clean up whatever we have currently allocated
                 for (uint8_t ii = 0; ii <= i; ii++)
                 {
@@ -2513,3 +2532,6 @@ namespace AP
     }
 
 };
+
+#endif //#if HAL_INS_ENABLED
+

@@ -31,9 +31,6 @@ public:
     /// Constructor
     AC_WPNav(const AP_InertialNav& inav, const AP_AHRS_View& ahrs, AC_PosControl& pos_control, const AC_AttitudeControl& attitude_control);
 
-    /// provide pointer to terrain database
-    void set_terrain(AP_Terrain* terrain_ptr) { _terrain = terrain_ptr; }
-
     /// provide rangefinder altitude
     void set_rangefinder_alt(bool use, bool healthy, float alt_cm) { _rangefinder_available = use; _rangefinder_healthy = healthy; _rangefinder_alt_cm = alt_cm; }
 
@@ -48,6 +45,13 @@ public:
         TERRAIN_FROM_TERRAINDATABASE,
     };
     AC_WPNav::TerrainSource get_terrain_source() const;
+
+    // get terrain's altitude (in cm above the ekf origin) at the current position (+ve means terrain below vehicle is above ekf origin's altitude)
+    bool get_terrain_offset(float& offset_cm);
+
+    // convert location to vector from ekf origin.  terrain_alt is set to true if resulting vector's z-axis should be treated as alt-above-terrain
+    //      returns false if conversion failed (likely because terrain data was not available)
+    bool get_vector_NEU(const Location &loc, Vector3f &vec, bool &terrain_alt);
 
     ///
     /// waypoint controller
@@ -194,8 +198,6 @@ public:
 
     // get target yaw in centi-degrees
     float get_yaw() const { return _pos_control.get_yaw_cd(); }
-    float get_yaw_rate_cds() const { return _pos_control.get_yaw_rate_cds(); }
-
     /// advance_wp_target_along_track - move target location along track from origin to destination
     bool advance_wp_target_along_track(float dt);
 
@@ -216,13 +218,6 @@ protected:
         uint8_t wp_yaw_set              : 1;    // true if yaw target has been set
     } _flags;
 
-    // get terrain's altitude (in cm above the ekf origin) at the current position (+ve means terrain below vehicle is above ekf origin's altitude)
-    bool get_terrain_offset(float& offset_cm);
-
-    // convert location to vector from ekf origin.  terrain_alt is set to true if resulting vector's z-axis should be treated as alt-above-terrain
-    //      returns false if conversion failed (likely because terrain data was not available)
-    bool get_vector_NEU(const Location &loc, Vector3f &vec, bool &terrain_alt);
-
     // helper function to calculate scurve jerk and jerk_time values
     // updates _scurve_jerk and _scurve_jerk_time
     void calc_scurve_jerk_and_jerk_time();
@@ -232,7 +227,6 @@ protected:
     const AP_AHRS_View&     _ahrs;
     AC_PosControl&          _pos_control;
     const AC_AttitudeControl& _attitude_control;
-    AP_Terrain              *_terrain;
 
     // parameters
     AP_Float    _wp_speed_cms;          // default maximum horizontal speed in cm/s during missions

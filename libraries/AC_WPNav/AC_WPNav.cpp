@@ -103,7 +103,8 @@ AC_WPNav::TerrainSource AC_WPNav::get_terrain_source() const
         return AC_WPNav::TerrainSource::TERRAIN_FROM_RANGEFINDER;
     }
 #if AP_TERRAIN_AVAILABLE
-    if ((_terrain != nullptr) && _terrain->enabled()) {
+    const AP_Terrain *terrain = AP::terrain();
+    if (terrain != nullptr && terrain->enabled()) {
         return AC_WPNav::TerrainSource::TERRAIN_FROM_TERRAINDATABASE;
     } else {
         return AC_WPNav::TerrainSource::TERRAIN_UNAVAILABLE;
@@ -141,7 +142,9 @@ void AC_WPNav::wp_and_spline_init(float speed_cms)
 
     // initialise position controller speed and acceleration
     _pos_control.set_max_speed_accel_xy(_wp_desired_speed_xy_cms, _wp_accel_cmss);
+    _pos_control.set_correction_speed_accel_xy(_wp_desired_speed_xy_cms, _wp_accel_cmss);
     _pos_control.set_max_speed_accel_z(-_wp_speed_down_cms, _wp_speed_up_cms, _wp_accel_z_cmss);
+    _pos_control.set_correction_speed_accel_z(-_wp_speed_down_cms, _wp_speed_up_cms, _wp_accel_z_cmss);
 
     // calculate scurve jerk and jerk time
     if (!is_positive(_wp_jerk)) {
@@ -177,7 +180,6 @@ void AC_WPNav::set_speed_xy(float speed_cms)
     // range check target speed
     if (speed_cms >= WPNAV_WP_SPEED_MIN) {
         _wp_desired_speed_xy_cms = speed_cms;
-        _pos_control.set_max_speed_accel_xy(_wp_desired_speed_xy_cms, _wp_accel_cmss);
         update_track_with_speed_accel_limits();
     }
 }
@@ -421,6 +423,14 @@ bool AC_WPNav::advance_wp_target_along_track(float dt)
         return false;
     }
 
+    // input shape the terrain offset
+    shape_pos_vel_accel(terr_offset, 0.0f, 0.0f,
+        _pos_terrain_offset, _vel_terrain_offset, _accel_terrain_offset,
+        0.0f, _pos_control.get_max_speed_down_cms(), _pos_control.get_max_speed_up_cms(),
+        -_pos_control.get_max_accel_z_cmss(), _pos_control.get_max_accel_z_cmss(), _pos_control.get_shaping_tc_z_s(), dt);
+
+    update_pos_vel_accel(_pos_terrain_offset, _vel_terrain_offset, _accel_terrain_offset, dt, 0.0f);
+
     // get current position and adjust altitude to origin and destination's frame (i.e. _frame)
     const Vector3f &curr_pos = _inav.get_position() - Vector3f{0, 0, terr_offset};
 
@@ -464,14 +474,6 @@ bool AC_WPNav::advance_wp_target_along_track(float dt)
         _spline_this_leg.advance_target_along_track(_track_scalar_dt * dt, target_pos, target_vel);
         s_finished = _spline_this_leg.reached_destination();
     }
-
-    // input shape the terrain offset
-    shape_pos_vel_accel(terr_offset, 0.0f, 0.0f,
-                        _pos_terrain_offset, _vel_terrain_offset, _accel_terrain_offset,
-                        0.0f, _pos_control.get_max_speed_down_cms(), _pos_control.get_max_speed_up_cms(),
-                        -_pos_control.get_max_accel_z_cmss(), _pos_control.get_max_accel_z_cmss(), _pos_control.get_shaping_tc_z_s(), dt);
-
-    update_pos_vel_accel(_pos_terrain_offset, _vel_terrain_offset, _accel_terrain_offset, dt, 0.0f);
 
     // convert final_target.z to altitude above the ekf origin
     target_pos.z += _pos_terrain_offset;
@@ -575,7 +577,9 @@ bool AC_WPNav::get_terrain_offset(float& offset_cm)
     case AC_WPNav::TerrainSource::TERRAIN_FROM_TERRAINDATABASE:
 #if AP_TERRAIN_AVAILABLE
         float terr_alt = 0.0f;
-        if (_terrain != nullptr && _terrain->height_above_terrain(terr_alt, true)) {
+        AP_Terrain *terrain = AP::terrain();
+        if (terrain != nullptr &&
+            terrain->height_above_terrain(terr_alt, true)) {
             offset_cm = _inav.get_altitude() - (terr_alt * 100.0f);
             return true;
         }

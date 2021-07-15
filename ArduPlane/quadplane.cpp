@@ -790,9 +790,6 @@ bool QuadPlane::setup(void)
         AP_BoardConfig::config_error("Unable to allocate %s", "wp_nav");
     }
     AP_Param::load_object_from_eeprom(wp_nav, wp_nav->var_info);
-#if AP_TERRAIN_AVAILABLE
-    wp_nav->set_terrain(&plane.terrain);
-#endif
 
     loiter_nav = new AC_Loiter(inertial_nav, *ahrs_view, *pos_control, *attitude_control);
     if (!loiter_nav) {
@@ -1134,6 +1131,7 @@ void QuadPlane::init_hover(void)
 {
     // set vertical speed and acceleration limits
     pos_control->set_max_speed_accel_z(-get_pilot_velocity_z_max_dn(), pilot_velocity_z_max_up, pilot_accel_z);
+    pos_control->set_correction_speed_accel_z(-get_pilot_velocity_z_max_dn(), pilot_velocity_z_max_up, pilot_accel_z);
     set_climb_rate_cms(0, false);
 
     init_throttle_wait();
@@ -1320,6 +1318,7 @@ void QuadPlane::init_loiter(void)
 
     // set vertical speed and acceleration limits
     pos_control->set_max_speed_accel_z(-get_pilot_velocity_z_max_dn(), pilot_velocity_z_max_up, pilot_accel_z);
+    pos_control->set_correction_speed_accel_z(-get_pilot_velocity_z_max_dn(), pilot_velocity_z_max_up, pilot_accel_z);
 
     init_throttle_wait();
 
@@ -2562,6 +2561,7 @@ void QuadPlane::run_xy_controller(void)
 {
     if (!pos_control->is_active_xy()) {
         pos_control->set_max_speed_accel_xy(wp_nav->get_default_speed_xy(), wp_nav->get_wp_acceleration());
+        pos_control->set_correction_speed_accel_xy(wp_nav->get_default_speed_xy(), wp_nav->get_wp_acceleration());
         pos_control->init_xy_controller();
     }
     pos_control->update_xy_controller();
@@ -2599,6 +2599,8 @@ void QuadPlane::PosControlState::set_state(enum position_control_state s)
             // POSITION2 changes target speed, so we need to change it
             // back to normal
             qp.pos_control->set_max_speed_accel_xy(qp.wp_nav->get_default_speed_xy(),
+                                                   qp.wp_nav->get_wp_acceleration());
+            qp.pos_control->set_correction_speed_accel_xy(qp.wp_nav->get_default_speed_xy(),
                                                    qp.wp_nav->get_wp_acceleration());
         } else if (s == QPOS_AIRBRAKE) {
             // start with zero integrator on vertical throttle
@@ -2907,6 +2909,7 @@ void QuadPlane::vtol_position_controller(void)
         const float scaled_wp_speed = get_scaled_wp_speed(degrees(diff_wp.angle()));
 
         pos_control->set_max_speed_accel_xy(scaled_wp_speed*100, wp_nav->get_wp_acceleration());
+        pos_control->set_correction_speed_accel_xy(scaled_wp_speed*100, wp_nav->get_wp_acceleration());
 
         run_xy_controller();
 
@@ -3098,6 +3101,7 @@ void QuadPlane::setup_target_position(void)
 
     // set vertical speed and acceleration limits
     pos_control->set_max_speed_accel_z(-get_pilot_velocity_z_max_dn(), pilot_velocity_z_max_up, pilot_accel_z);
+    pos_control->set_correction_speed_accel_z(-get_pilot_velocity_z_max_dn(), pilot_velocity_z_max_up, pilot_accel_z);
 }
 
 /*
@@ -3275,6 +3279,7 @@ bool QuadPlane::do_vtol_takeoff(const AP_Mission::Mission_Command& cmd)
 
     // set vertical speed and acceleration limits
     pos_control->set_max_speed_accel_z(-get_pilot_velocity_z_max_dn(), pilot_velocity_z_max_up, pilot_accel_z);
+    pos_control->set_correction_speed_accel_z(-get_pilot_velocity_z_max_dn(), pilot_velocity_z_max_up, pilot_accel_z);
 
     // initialise the vertical position controller
     pos_control->init_z_controller();

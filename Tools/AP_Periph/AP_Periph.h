@@ -23,6 +23,10 @@
 #include <AP_HAL_SITL/CANSocketIface.h>
 #endif
 
+#ifndef HAL_NO_GCS
+#include "GCS_MAVLink.h"
+#endif
+
 #if defined(HAL_PERIPH_NEOPIXEL_COUNT_WITHOUT_NOTIFY) || defined(HAL_PERIPH_ENABLE_NCP5623_LED_WITHOUT_NOTIFY) || defined(HAL_PERIPH_ENABLE_NCP5623_BGR_LED_WITHOUT_NOTIFY) || defined(HAL_PERIPH_ENABLE_TOSHIBA_LED_WITHOUT_NOTIFY)
 #define AP_PERIPH_HAVE_LED_WITHOUT_NOTIFY
 #endif
@@ -126,7 +130,7 @@ public:
 #if HAL_NUM_CAN_IFACES >= 2
     // This allows you to change the protocol and it continues to use the one at boot.
     // Without this, changing away from UAVCAN causes loss of comms and you can't
-    // change the rest of your params or veryofy it suceeded.
+    // change the rest of your params or verify it succeeded.
     AP_CANManager::Driver_Type can_protocol_cached[HAL_NUM_CAN_IFACES];
 #endif
 
@@ -210,6 +214,9 @@ public:
     AP_Logger logger;
 #endif
 
+#ifndef HAL_NO_GCS
+    GCS_Periph _gcs;
+#endif
     // setup the var_info table
     AP_Param param_loader{var_info};
 
@@ -224,6 +231,8 @@ public:
 
     // show stack as DEBUG msgs
     void show_stack_free();
+
+    static bool no_iface_finished_dna;
 };
 
 namespace AP
