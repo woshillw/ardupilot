@@ -43,15 +43,15 @@
 #define CNTL2_VAL_SRST 1
 
 #define AVGCNTL_REG 0x41
-#define AVGCNTL_VAL_XZ_0  (0)
-#define AVGCNTL_VAL_XZ_2  (1)
-#define AVGCNTL_VAL_XZ_4  (2)
-#define AVGCNTL_VAL_XZ_8  (3)
+#define AVGCNTL_VAL_XZ_0 (0)
+#define AVGCNTL_VAL_XZ_2 (1)
+#define AVGCNTL_VAL_XZ_4 (2)
+#define AVGCNTL_VAL_XZ_8 (3)
 #define AVGCNTL_VAL_XZ_16 (4)
-#define AVGCNTL_VAL_Y_0  (0 << 3)
-#define AVGCNTL_VAL_Y_2  (1 << 3)
-#define AVGCNTL_VAL_Y_4  (2 << 3)
-#define AVGCNTL_VAL_Y_8  (3 << 3)
+#define AVGCNTL_VAL_Y_0 (0 << 3)
+#define AVGCNTL_VAL_Y_2 (1 << 3)
+#define AVGCNTL_VAL_Y_4 (2 << 3)
+#define AVGCNTL_VAL_Y_8 (3 << 3)
 #define AVGCNTL_VAL_Y_16 (4 << 3)
 
 #define PDCNTL_REG 0x42
@@ -70,9 +70,8 @@
 
 static const int16_t IST8310_MAX_VAL_XY = (1600 / IST8310_RESOLUTION) + 1;
 static const int16_t IST8310_MIN_VAL_XY = -IST8310_MAX_VAL_XY;
-static const int16_t IST8310_MAX_VAL_Z  = (2500 / IST8310_RESOLUTION) + 1;
-static const int16_t IST8310_MIN_VAL_Z  = -IST8310_MAX_VAL_Z;
-
+static const int16_t IST8310_MAX_VAL_Z = (2500 / IST8310_RESOLUTION) + 1;
+static const int16_t IST8310_MIN_VAL_Z = -IST8310_MAX_VAL_Z;
 
 extern const AP_HAL::HAL &hal;
 
@@ -80,12 +79,14 @@ AP_Compass_Backend *AP_Compass_IST8310::probe(AP_HAL::OwnPtr<AP_HAL::I2CDevice> 
                                               bool force_external,
                                               enum Rotation rotation)
 {
-    if (!dev) {
+    if (!dev)
+    {
         return nullptr;
     }
 
     AP_Compass_IST8310 *sensor = new AP_Compass_IST8310(std::move(dev), force_external, rotation);
-    if (!sensor || !sensor->init()) {
+    if (!sensor || !sensor->init())
+    {
         delete sensor;
         return nullptr;
     }
@@ -96,9 +97,7 @@ AP_Compass_Backend *AP_Compass_IST8310::probe(AP_HAL::OwnPtr<AP_HAL::I2CDevice> 
 AP_Compass_IST8310::AP_Compass_IST8310(AP_HAL::OwnPtr<AP_HAL::Device> dev,
                                        bool force_external,
                                        enum Rotation rotation)
-    : _dev(std::move(dev))
-    , _rotation(rotation)
-    , _force_external(force_external)
+    : _dev(std::move(dev)), _rotation(rotation), _force_external(force_external)
 {
 }
 
@@ -113,13 +112,16 @@ bool AP_Compass_IST8310::init()
 
     uint8_t whoami;
     if (!_dev->read_registers(WAI_REG, &whoami, 1) ||
-        whoami != DEVICE_ID) {
+        whoami != DEVICE_ID)
+    {
         // not an IST8310
         goto fail;
     }
 
-    for (; reset_count < 5; reset_count++) {
-        if (!_dev->write_register(CNTL2_REG, CNTL2_VAL_SRST)) {
+    for (; reset_count < 5; reset_count++)
+    {
+        if (!_dev->write_register(CNTL2_REG, CNTL2_VAL_SRST))
+        {
             hal.scheduler->delay(10);
             continue;
         }
@@ -128,18 +130,21 @@ bool AP_Compass_IST8310::init()
 
         uint8_t cntl2 = 0xFF;
         if (_dev->read_registers(CNTL2_REG, &cntl2, 1) &&
-            (cntl2 & 0x01) == 0) {
+            (cntl2 & 0x01) == 0)
+        {
             break;
         }
     }
 
-    if (reset_count == 5) {
+    if (reset_count == 5)
+    {
         printf("IST8310: failed to reset device\n");
         goto fail;
     }
 
     if (!_dev->write_register(AVGCNTL_REG, AVGCNTL_VAL_Y_16 | AVGCNTL_VAL_XZ_16) ||
-        !_dev->write_register(PDCNTL_REG, PDCNTL_VAL_PULSE_DURATION_NORMAL)) {
+        !_dev->write_register(PDCNTL_REG, PDCNTL_VAL_PULSE_DURATION_NORMAL))
+    {
         printf("IST8310: found device but could not set it up\n");
         goto fail;
     }
@@ -154,7 +159,8 @@ bool AP_Compass_IST8310::init()
 
     // register compass instance
     _dev->set_device_type(DEVTYPE_IST8310);
-    if (!register_compass(_dev->get_bus_id(), _instance)) {
+    if (!register_compass(_dev->get_bus_id(), _instance))
+    {
         return false;
     }
     set_dev_id(_instance, _dev->get_bus_id());
@@ -164,12 +170,13 @@ bool AP_Compass_IST8310::init()
 
     set_rotation(_instance, _rotation);
 
-    if (_force_external) {
+    if (_force_external)
+    {
         set_external(_instance, true);
     }
-    
+
     _periodic_handle = _dev->register_periodic_callback(SAMPLING_PERIOD_USEC,
-        FUNCTOR_BIND_MEMBER(&AP_Compass_IST8310::timer, void));
+                                                        FUNCTOR_BIND_MEMBER(&AP_Compass_IST8310::timer, void));
 
     return true;
 
@@ -180,27 +187,31 @@ fail:
 
 void AP_Compass_IST8310::start_conversion()
 {
-    if (!_dev->write_register(CNTL1_REG, CNTL1_VAL_SINGLE_MEASUREMENT_MODE)) {
+    if (!_dev->write_register(CNTL1_REG, CNTL1_VAL_SINGLE_MEASUREMENT_MODE))
+    {
         _ignore_next_sample = true;
     }
 }
 
 void AP_Compass_IST8310::timer()
 {
-    if (_ignore_next_sample) {
+    if (_ignore_next_sample)
+    {
         _ignore_next_sample = false;
         start_conversion();
         return;
     }
 
-    struct PACKED {
+    struct PACKED
+    {
         le16_t rx;
         le16_t ry;
         le16_t rz;
     } buffer;
 
-    bool ret = _dev->read_registers(OUTPUT_X_L_REG, (uint8_t *) &buffer, sizeof(buffer));
-    if (!ret) {
+    bool ret = _dev->read_registers(OUTPUT_X_L_REG, (uint8_t *)&buffer, sizeof(buffer));
+    if (!ret)
+    {
         return;
     }
 
@@ -219,29 +230,33 @@ void AP_Compass_IST8310::timer()
      */
     if (x > IST8310_MAX_VAL_XY || x < IST8310_MIN_VAL_XY ||
         y > IST8310_MAX_VAL_XY || y < IST8310_MIN_VAL_XY ||
-        z > IST8310_MAX_VAL_Z  || z < IST8310_MIN_VAL_Z) {
+        z > IST8310_MAX_VAL_Z || z < IST8310_MIN_VAL_Z)
+    {
         return;
     }
 
     // flip Z to conform to right-hand rule convention
-    z = -z;
+    // z = -z;
 
     /* Resolution: 0.3 µT/LSB - already convert to milligauss */
-    Vector3f field = Vector3f{x * 3.0f, y * 3.0f, z * 3.0f};
+    // Vector3f field = Vector3f{x * 3.0f, y * 3.0f, z * 3.0f};
+    Vector3f field = Vector3f{z * 3.0f, -y * 3.0f, -x * 3.0f};
 
 #ifdef HAL_IST8310_I2C_HEATER_OFFSET
     /*
       the internal IST8310 can be impacted by the magnetic field from
       a heater. We use the heater duty cycle to correct for the error
      */
-    if (!is_external(_instance) && AP_HAL::Device::devid_get_bus_type(_dev->get_bus_id()) == AP_HAL::Device::BUS_TYPE_I2C) {
+    if (!is_external(_instance) && AP_HAL::Device::devid_get_bus_type(_dev->get_bus_id()) == AP_HAL::Device::BUS_TYPE_I2C)
+    {
         const auto *bc = AP::boardConfig();
-        if (bc) {
+        if (bc)
+        {
             field += HAL_IST8310_I2C_HEATER_OFFSET * bc->get_heater_duty_cycle() * 0.01;
         }
     }
 #endif
-    
+
     accumulate_sample(field, _instance);
 }
 

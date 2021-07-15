@@ -13,7 +13,7 @@
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "AP_Compass_MMC5xx3.h"
+#include "AP_Compass_MMC5983.h"
 
 #include <AP_HAL/AP_HAL.h>
 #include <stdio.h>
@@ -22,10 +22,10 @@ extern const AP_HAL::HAL &hal;
 
 #define REG_PRODUCT_ID 0x2F
 #define REG_XOUT_L 0x00
-#define REG_STATUS 0x07
-#define REG_CONTROL0 0x08
-#define REG_CONTROL1 0x09
-#define REG_CONTROL2 0x0A
+#define REG_STATUS 0x08
+#define REG_CONTROL0 0x09
+#define REG_CONTROL1 0x0A
+#define REG_CONTROL2 0x0B
 
 // bits in REG_CONTROL0
 #define REG_CONTROL0_RESET 0x10
@@ -35,19 +35,19 @@ extern const AP_HAL::HAL &hal;
 // bits in REG_CONTROL1
 #define REG_CONTROL1_SW_RST 0x80
 #define REG_CONTROL1_BW0 0x01
-#define REG_CONTROL1_BW1 0x02
+#define REG_CONTROL1_BW1 0x00
 
-#define MMC5883_ID 0x0C
+#define MMC5983_ID 0x30
 
-AP_Compass_Backend *AP_Compass_MMC5XX3::probe(AP_HAL::OwnPtr<AP_HAL::I2CDevice> dev,
-                                              bool force_external,
+AP_Compass_Backend *AP_Compass_MMC5983::probe(AP_HAL::OwnPtr<AP_HAL::Device> dev,
                                               enum Rotation rotation)
 {
     if (!dev)
     {
         return nullptr;
     }
-    AP_Compass_MMC5XX3 *sensor = new AP_Compass_MMC5XX3(std::move(dev), force_external, rotation);
+
+    AP_Compass_MMC5983 *sensor = new AP_Compass_MMC5983(std::move(dev), rotation);
     if (!sensor || !sensor->init())
     {
         delete sensor;
@@ -57,25 +57,30 @@ AP_Compass_Backend *AP_Compass_MMC5XX3::probe(AP_HAL::OwnPtr<AP_HAL::I2CDevice> 
     return sensor;
 }
 
-AP_Compass_MMC5XX3::AP_Compass_MMC5XX3(AP_HAL::OwnPtr<AP_HAL::Device> _dev,
-                                       bool _force_external,
+AP_Compass_MMC5983::AP_Compass_MMC5983(AP_HAL::OwnPtr<AP_HAL::Device> _dev,
                                        enum Rotation _rotation)
-    : dev(std::move(_dev)), force_external(_force_external), rotation(_rotation)
+    : dev(std::move(_dev)), rotation(_rotation)
 {
 }
 
-bool AP_Compass_MMC5XX3::init()
+bool AP_Compass_MMC5983::init()
 {
     // take i2c bus sempahore
     WITH_SEMAPHORE(dev->get_semaphore());
+
+    if (dev->bus_type() == AP_HAL::Device::BUS_TYPE_SPI)
+    {
+        // read has high bit set for SPI
+        dev->set_read_flag(0x80);
+    }
 
     dev->set_retries(10);
 
     uint8_t whoami;
     if (!dev->read_registers(REG_PRODUCT_ID, &whoami, 1) ||
-        whoami != MMC5883_ID)
+        whoami != MMC5983_ID)
     {
-        // not a MMC5883
+        // not a MMC5983
         return false;
     }
 
@@ -91,7 +96,7 @@ bool AP_Compass_MMC5XX3::init()
     } // 16 bit operation, 1.6ms measurement time
 
     /* register the compass instance in the frontend */
-    dev->set_device_type(DEVTYPE_MMC5883);
+    dev->set_device_type(DEVTYPE_MMC5983);
     if (!register_compass(dev->get_bus_id(), compass_instance))
     {
         return false;
@@ -99,7 +104,7 @@ bool AP_Compass_MMC5XX3::init()
 
     set_dev_id(compass_instance, dev->get_bus_id());
 
-    printf("Found a MMC5883 on 0x%x as compass %u\n", dev->get_bus_id(), compass_instance);
+    printf("Found a MMC5983 on 0x%x as compass %u\n", dev->get_bus_id(), compass_instance);
 
     set_rotation(compass_instance, rotation);
 
@@ -111,21 +116,21 @@ bool AP_Compass_MMC5XX3::init()
     dev->set_retries(1);
 
     // call timer() at 1kHz
-    dev->register_periodic_callback(1000,
-                                    FUNCTOR_BIND_MEMBER(&AP_Compass_MMC5XX3::timer, void));
+    dev->register_periodic_callback(200,
+                                    FUNCTOR_BIND_MEMBER(&AP_Compass_MMC5983::timer, void));
 
     return true;
 }
 
-void AP_Compass_MMC5XX3::timer()
+void AP_Compass_MMC5983::timer()
 {
     // recalculate the offset with set/reset operation every measure_count_limit measurements
     // sensor is read at about 500Hz, so about every 10 seconds
-    const uint16_t measure_count_limit = 5000;
-    const uint16_t zero_offset = 32768; // 16 bit mode
-    const uint16_t sensitivity = 4096;  // counts per Gauss, 16 bit mode
+    const uint32_t measure_count_limit = 5000;
+    const float zero_offset = 131072;   // 16 bit mode
+    const uint32_t sensitivity = 16384; // counts per Gauss, 16 bit mode
     constexpr float counts_to_milliGauss = 1.0e3f / sensitivity;
-
+    uint8_t rawData[7]; // x/y/z mag register data stored here
     /*
       we use the SET/RESET method to remove bridge offset every
       measure_count_limit measurements. This involves a fairly complex
@@ -176,10 +181,16 @@ void AP_Compass_MMC5XX3::timer()
         }
 
         // read measurement
-        if (!dev->read_registers(REG_XOUT_L, (uint8_t *)&data0[0], 6))
+        if (!dev->read_registers(REG_XOUT_L, (uint8_t *)&rawData[0], 7))
         {
             state = MMCState::STATE_SET;
             break;
+        }
+        else
+        {
+            data0[0] = (uint32_t)(rawData[0] << 10 | rawData[1] << 2 | (rawData[6] & 0xC0) >> 6); // Turn the 18 bits into a unsigned 32-bit value
+            data0[1] = (uint32_t)(rawData[2] << 10 | rawData[3] << 2 | (rawData[6] & 0x30) >> 4); // Turn the 18 bits into a unsigned 32-bit value
+            data0[2] = (uint32_t)(rawData[4] << 10 | rawData[5] << 2 | (rawData[6] & 0x0C) >> 2); // Turn the 18 bits into a unsigned 32-bit value
         }
 
         // request set operation
@@ -224,11 +235,17 @@ void AP_Compass_MMC5XX3::timer()
             break;
         }
 
-        uint16_t data1[3];
-        if (!dev->read_registers(REG_XOUT_L, (uint8_t *)&data1[0], 6))
+        uint32_t data1[3];
+        if (!dev->read_registers(REG_XOUT_L, (uint8_t *)&rawData[0], 7))
         {
             state = MMCState::STATE_SET;
             break;
+        }
+        else
+        {
+            data1[0] = (uint32_t)(rawData[0] << 10 | rawData[1] << 2 | (rawData[6] & 0xC0) >> 6); // Turn the 18 bits into a unsigned 32-bit value
+            data1[1] = (uint32_t)(rawData[2] << 10 | rawData[3] << 2 | (rawData[6] & 0x30) >> 4); // Turn the 18 bits into a unsigned 32-bit value
+            data1[2] = (uint32_t)(rawData[4] << 10 | rawData[5] << 2 | (rawData[6] & 0x0C) >> 2); // Turn the 18 bits into a unsigned 32-bit value
         }
 
         /*
@@ -236,10 +253,10 @@ void AP_Compass_MMC5XX3::timer()
          */
         Vector3f f1{float(data0[0]) - zero_offset,
                     float(data0[1]) - zero_offset,
-                    float(data0[2]) - zero_offset};
+                    -(float(data0[2]) - zero_offset)};
         Vector3f f2{float(data1[0]) - zero_offset,
                     float(data1[1]) - zero_offset,
-                    float(data1[2]) - zero_offset};
+                    -(float(data1[2]) - zero_offset)};
 
         Vector3f field{(f1 - f2) * counts_to_milliGauss * 0.5f};
         Vector3f new_offset{(f1 + f2) * counts_to_milliGauss * 0.5f};
@@ -287,17 +304,24 @@ void AP_Compass_MMC5XX3::timer()
             break;
         }
 
-        uint16_t data1[3];
-        if (!dev->read_registers(REG_XOUT_L, (uint8_t *)&data1[0], 6))
+        uint32_t data1[3];
+        if (!dev->read_registers(REG_XOUT_L, (uint8_t *)&rawData[0], 7))
         {
             printf("cant read data\n");
             state = MMCState::STATE_SET;
             break;
         }
+        else
+        {
+            data1[0] = (uint32_t)(rawData[0] << 10 | rawData[1] << 2 | (rawData[6] & 0xC0) >> 6); // Turn the 18 bits into a unsigned 32-bit value
+            data1[1] = (uint32_t)(rawData[2] << 10 | rawData[3] << 2 | (rawData[6] & 0x30) >> 4); // Turn the 18 bits into a unsigned 32-bit value
+            data1[2] = (uint32_t)(rawData[4] << 10 | rawData[5] << 2 | (rawData[6] & 0x0C) >> 2); // Turn the 18 bits into a unsigned 32-bit value
+        }
 
         Vector3f field{float(data1[0]) - zero_offset,
                        float(data1[1]) - zero_offset,
-                       float(data1[2]) - zero_offset};
+                       -(float(data1[2]) - zero_offset)};
+
         field *= counts_to_milliGauss;
         field += offset;
         accumulate_sample(field, compass_instance);
@@ -320,7 +344,7 @@ void AP_Compass_MMC5XX3::timer()
     }
 }
 
-void AP_Compass_MMC5XX3::read()
+void AP_Compass_MMC5983::read()
 {
     drain_accumulated_samples(compass_instance);
 }

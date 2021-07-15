@@ -144,7 +144,7 @@ function install_arm_none_eabi_toolchain() {
   # (see https://launchpad.net/gcc-arm-embedded/)
   ARM_ROOT="gcc-arm-none-eabi-6-2017-q2-update"
   ARM_TARBALL="$ARM_ROOT-linux.tar.bz2"
-  ARM_TARBALL_URL="https://firmware.ardupilot.org/Tools/STM32-tools/$ARM_TARBALL"
+  ARM_TARBALL_URL="https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu-rm/6-2017q2/gcc-arm-none-eabi-6-2017-q2-update-linux.tar.bz2"
   if [ ! -d $OPT/$ARM_ROOT ]; then
     (
         cd $OPT;

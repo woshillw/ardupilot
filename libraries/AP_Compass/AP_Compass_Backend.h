@@ -25,7 +25,7 @@
 #define HAL_MSP_COMPASS_ENABLED HAL_MSP_SENSORS_ENABLED
 #endif
 
-class Compass;  // forward declaration
+class Compass; // forward declaration
 class AP_Compass_Backend
 {
 public:
@@ -46,12 +46,13 @@ public:
       If a change is made to a driver that would make existing
       calibration values invalid then this number must be changed.
      */
-    enum DevTypes {
+    enum DevTypes
+    {
         DEVTYPE_HMC5883_OLD = 0x01,
         DEVTYPE_HMC5883 = 0x07,
         DEVTYPE_LSM303D = 0x02,
-        DEVTYPE_AK8963  = 0x04,
-        DEVTYPE_BMM150  = 0x05,
+        DEVTYPE_AK8963 = 0x04,
+        DEVTYPE_BMM150 = 0x05,
         DEVTYPE_LSM9DS1 = 0x06,
         DEVTYPE_LIS3MDL = 0x08,
         DEVTYPE_AK09916 = 0x09,
@@ -59,24 +60,28 @@ public:
         DEVTYPE_ICM20948 = 0x0B,
         DEVTYPE_MMC3416 = 0x0C,
         DEVTYPE_QMC5883L = 0x0D,
-        DEVTYPE_MAG3110  = 0x0E,
-        DEVTYPE_SITL  = 0x0F,
+        DEVTYPE_MAG3110 = 0x0E,
+        DEVTYPE_SITL = 0x0F,
         DEVTYPE_IST8308 = 0x10,
         DEVTYPE_RM3100 = 0x11,
         DEVTYPE_RM3100_2 = 0x12, // unused, past mistake
         DEVTYPE_MMC5883 = 0x13,
+        DEVTYPE_MMC5983 = 0x14,
     };
 
 #if HAL_MSP_COMPASS_ENABLED
-    virtual void handle_msp(const MSP::msp_compass_data_message_t &pkt) {}
+    virtual void handle_msp(const MSP::msp_compass_data_message_t &pkt)
+    {
+    }
 #endif
 
 #if HAL_EXTERNAL_AHRS_ENABLED
-    virtual void handle_external(const AP_ExternalAHRS::mag_data_message_t &pkt) {}
+    virtual void handle_external(const AP_ExternalAHRS::mag_data_message_t &pkt)
+    {
+    }
 #endif
-    
-protected:
 
+protected:
     /*
      * A compass measurement is expected to pass through the following functions:
      * 1. rotate_field - this rotates the measurement in-place from sensor frame
@@ -101,7 +106,7 @@ protected:
     void drain_accumulated_samples(uint8_t instance, const Vector3f *scale = NULL);
 
     // register a new compass instance with the frontend
-    bool register_compass(int32_t dev_id, uint8_t& instance) const;
+    bool register_compass(int32_t dev_id, uint8_t &instance) const;
 
     // set dev_id for an instance
     void set_dev_id(uint8_t instance, uint32_t dev_id);
@@ -120,7 +125,7 @@ protected:
 
     // get board orientation (for SITL)
     enum Rotation get_board_orientation(void) const;
-    
+
     // access to frontend
     Compass &_compass;
 
@@ -129,11 +134,12 @@ protected:
 
     // Check that the compass field is valid by using a mean filter on the vector length
     bool field_ok(const Vector3f &field);
-    
+
     uint32_t get_error_count() const { return _error_count; }
+
 private:
     void apply_corrections(Vector3f &mag, uint8_t i);
-    
+
     // mean field length for range filter
     float _mean_field_length;
     // number of dropped samples. Not used for now, but can be usable to choose more reliable sensor
